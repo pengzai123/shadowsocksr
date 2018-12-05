@@ -198,11 +198,12 @@ class TransferBase(object):
 		if port in self.last_get_transfer: del self.last_get_transfer[port]
 		if port in self.last_update_transfer: del self.last_update_transfer[port]
 
+	#启动服务
 	def new_server(self, port, passwd, cfg):
 		protocol = cfg.get('protocol', ServerPool.get_instance().config.get('protocol', 'origin'))
 		method = cfg.get('method', ServerPool.get_instance().config.get('method', 'None'))
 		obfs = cfg.get('obfs', ServerPool.get_instance().config.get('obfs', 'plain'))
-		logging.info('db start server at port [%s] pass [%s] protocol [%s] method [%s] obfs [%s]' % (port, passwd, protocol, method, obfs))
+		#logging.info('db start server at port [%s] pass [%s] protocol [%s] method [%s] obfs [%s]' % (port, passwd, protocol, method, obfs))
 		ServerPool.get_instance().new_server(port, cfg)
 
 	def cmp(self, val1, val2):
@@ -245,7 +246,9 @@ class TransferBase(object):
 				db_instance.load_cfg()
 				try:
 					db_instance.push_db_all_user()
+					logging.info('begin pull_db_all_user: %s',time.time())
 					rows = db_instance.pull_db_all_user()
+					logging.info('end pull_db_all_user: %s',time.time())
 					if rows:
 						db_instance.pull_ok = True
 						config = shell.get_config(False)
@@ -259,13 +262,19 @@ class TransferBase(object):
 							if "password" in val:
 								val["passwd"] = val["password"]
 							rows.append(val)
+					logging.info('begin del_server_out_of_bound_safe: %s',time.time())
 					db_instance.del_server_out_of_bound_safe(last_rows, rows)
+					logging.info('end del_server_out_of_bound_safe: %s',time.time())
 					last_rows = rows
 				except Exception as e:
 					trace = traceback.format_exc()
 					logging.error(trace)
-					#logging.warn('db thread except:%s' % e)
-				if db_instance.event.wait(get_config().UPDATE_TIME) or not ServerPool.get_instance().thread.is_alive():
+					logging.error('db thread except:%s ' %(traceback.format_exc()))
+				if not ServerPool.get_instance().thread.is_alive():
+					logging.warn('pool is not alive --start')
+					break
+				if db_instance.event.wait(get_config().UPDATE_TIME):
+					logging.warn('event time --loop')
 					break
 		except KeyboardInterrupt as e:
 			pass
