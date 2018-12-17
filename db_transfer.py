@@ -250,7 +250,7 @@ class TransferBase(object):
 					rows = db_instance.pull_db_all_user()
 					logging.info('end pull_db_all_user: %s  rows: %s',time.time(),len(rows))
 					if len(rows)<1:
-						logging.info('rows_count<0 跳过...')
+						logging.info('rows_count<1 跳过...')
 						continue
 					if rows:
 						db_instance.pull_ok = True
