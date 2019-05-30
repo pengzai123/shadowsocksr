@@ -198,11 +198,12 @@ class TransferBase(object):
 		if port in self.last_get_transfer: del self.last_get_transfer[port]
 		if port in self.last_update_transfer: del self.last_update_transfer[port]
 
+	#启动服务
 	def new_server(self, port, passwd, cfg):
 		protocol = cfg.get('protocol', ServerPool.get_instance().config.get('protocol', 'origin'))
 		method = cfg.get('method', ServerPool.get_instance().config.get('method', 'None'))
 		obfs = cfg.get('obfs', ServerPool.get_instance().config.get('obfs', 'plain'))
-		logging.info('db start server at port [%s] pass [%s] protocol [%s] method [%s] obfs [%s]' % (port, passwd, protocol, method, obfs))
+		#logging.info('db start server at port [%s] pass [%s] protocol [%s] method [%s] obfs [%s]' % (port, passwd, protocol, method, obfs))
 		ServerPool.get_instance().new_server(port, cfg)
 
 	def cmp(self, val1, val2):
@@ -245,7 +246,12 @@ class TransferBase(object):
 				db_instance.load_cfg()
 				try:
 					db_instance.push_db_all_user()
+					logging.info('begin pull_db_all_user: %s',time.time())
 					rows = db_instance.pull_db_all_user()
+					logging.info('end pull_db_all_user: %s  rows: %s',time.time(),len(rows))
+					if len(rows)<1:
+						logging.info('rows_count<1 跳过...')
+						continue
 					if rows:
 						db_instance.pull_ok = True
 						config = shell.get_config(False)
@@ -259,14 +265,20 @@ class TransferBase(object):
 							if "password" in val:
 								val["passwd"] = val["password"]
 							rows.append(val)
+					logging.info('begin del_server_out_of_bound_safe: %s',time.time())
 					db_instance.del_server_out_of_bound_safe(last_rows, rows)
+					logging.info('end del_server_out_of_bound_safe: %s',time.time())
 					last_rows = rows
 				except Exception as e:
 					trace = traceback.format_exc()
 					logging.error(trace)
-					#logging.warn('db thread except:%s' % e)
-				if db_instance.event.wait(get_config().UPDATE_TIME) or not ServerPool.get_instance().thread.is_alive():
-					break
+					logging.error('dberror thread except:%s ' %(traceback.format_exc()))
+				else:
+					logging.error("dberror thread >>")
+				finally:
+					logging.info('thread_db pool')
+					if db_instance.event.wait(get_config().UPDATE_TIME):
+						logging.warn('db_instance.event.wait->>')
 		except KeyboardInterrupt as e:
 			pass
 		db_instance.del_servers()
@@ -347,9 +359,7 @@ class DbTransfer(TransferBase):
 					db=self.cfg["db"], charset='utf8',
 					ssl={'ca':self.cfg["ssl_ca"],'cert':self.cfg["ssl_cert"],'key':self.cfg["ssl_key"]})
 		else:
-			conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
-					user=self.cfg["user"], passwd=self.cfg["password"],
-					db=self.cfg["db"], charset='utf8')
+			conn = self.reConndb()
 
 		try:
 			cur = conn.cursor()
@@ -378,18 +388,39 @@ class DbTransfer(TransferBase):
 					db=self.cfg["db"], charset='utf8',
 					ssl={'ca':self.cfg["ssl_ca"],'cert':self.cfg["ssl_cert"],'key':self.cfg["ssl_key"]})
 		else:
-			conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
-					user=self.cfg["user"], passwd=self.cfg["password"],
-					db=self.cfg["db"], charset='utf8')
+			conn = self.reConndb()
 
 		try:
 			rows = self.pull_db_users(conn)
 		finally:
+			logging.warn('db close by  finally')
 			conn.close()
 
 		if not rows:
 			logging.warn('no user in db')
 		return rows
+
+	def reConndb(self):
+		import cymysql
+		# 数据库连接重试功能和连接超时功能的DB连接
+		_conn_status = True
+		_max_retries_count = 10000  # 设置最大重试次数
+		_conn_retries_count = 0  # 初始重试次数
+		_conn_timeout = 5  # 连接超时时间为3秒
+		while _conn_status and _conn_retries_count <= _max_retries_count:
+			try:
+				logging.info('连接数据库中..%s',_conn_retries_count)
+				conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
+					user=self.cfg["user"], passwd=self.cfg["password"],
+					db=self.cfg["db"], charset='utf8', connect_timeout=_conn_timeout)
+				_conn_status = False  # 如果conn成功则_status为设置为False则退出循环，返回db连接对象
+				return conn
+			except:
+				_conn_retries_count += 1
+				logging.warn('conn_retries_count %s',_conn_retries_count)
+			logging.warn('connect db is error!!')
+			time.sleep(3)  # 此为测试看效果
+ 			continue
 
 	def pull_db_users(self, conn):
 		try:
@@ -446,9 +477,7 @@ class Dbv3Transfer(DbTransfer):
 					db=self.cfg["db"], charset='utf8',
 					ssl={'ca':self.cfg["ssl_ca"],'cert':self.cfg["ssl_cert"],'key':self.cfg["ssl_key"]})
 		else:
-			conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
-					user=self.cfg["user"], passwd=self.cfg["password"],
-					db=self.cfg["db"], charset='utf8')
+			conn = self.reConndb()
 		conn.autocommit(True)
 
 		for id in dt_transfer.keys():

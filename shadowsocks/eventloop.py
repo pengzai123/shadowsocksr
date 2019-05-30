@@ -177,8 +177,14 @@ class EventLoop(object):
         self._impl.unregister(fd)
 
     def removefd(self, fd):
-        del self._fdmap[fd]
-        self._impl.unregister(fd)
+        try:
+            if fd in self._fdmap:    
+                del self._fdmap[fd]
+                self._impl.unregister(fd)
+            else:
+                logging.error('mykeyerror:%s', fd)        
+        except Exception as e:
+            logging.error(e)
 
     def add_periodic(self, callback):
         self._periodic_callbacks.append(callback)

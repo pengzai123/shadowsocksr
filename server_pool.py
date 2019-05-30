@@ -162,7 +162,7 @@ class ServerPool(object):
 
 				except Exception as e:
 					if not ipv6_ok:
-						logging.warn("IPV4 %s " % (e,))
+						logging.warn("IPV4 %s :%d" % ((e) ,port))
 
 		return True
 
