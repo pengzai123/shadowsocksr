@@ -359,9 +359,7 @@ class DbTransfer(TransferBase):
 					db=self.cfg["db"], charset='utf8',
 					ssl={'ca':self.cfg["ssl_ca"],'cert':self.cfg["ssl_cert"],'key':self.cfg["ssl_key"]})
 		else:
-			conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
-					user=self.cfg["user"], passwd=self.cfg["password"],
-					db=self.cfg["db"], charset='utf8')
+			conn = self.reConndb()
 
 		try:
 			cur = conn.cursor()
@@ -406,12 +404,12 @@ class DbTransfer(TransferBase):
 		import cymysql
 		# 数据库连接重试功能和连接超时功能的DB连接
 		_conn_status = True
-		_max_retries_count = 10  # 设置最大重试次数
+		_max_retries_count = 10000  # 设置最大重试次数
 		_conn_retries_count = 0  # 初始重试次数
-		_conn_timeout = 3  # 连接超时时间为3秒
+		_conn_timeout = 5  # 连接超时时间为3秒
 		while _conn_status and _conn_retries_count <= _max_retries_count:
 			try:
-				print '连接数据库中..'
+				logging.info('连接数据库中..%s',_conn_retries_count)
 				conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
 					user=self.cfg["user"], passwd=self.cfg["password"],
 					db=self.cfg["db"], charset='utf8', connect_timeout=_conn_timeout)
@@ -419,9 +417,9 @@ class DbTransfer(TransferBase):
 				return conn
 			except:
 				_conn_retries_count += 1
-				print _conn_retries_count
+				logging.warn('conn_retries_count %s',_conn_retries_count)
 			logging.warn('connect db is error!!')
-			#time.sleep(3)  # 此为测试看效果
+			time.sleep(3)  # 此为测试看效果
  			continue
 
 	def pull_db_users(self, conn):
@@ -479,9 +477,7 @@ class Dbv3Transfer(DbTransfer):
 					db=self.cfg["db"], charset='utf8',
 					ssl={'ca':self.cfg["ssl_ca"],'cert':self.cfg["ssl_cert"],'key':self.cfg["ssl_key"]})
 		else:
-			conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
-					user=self.cfg["user"], passwd=self.cfg["password"],
-					db=self.cfg["db"], charset='utf8')
+			conn = self.reConndb()
 		conn.autocommit(True)
 
 		for id in dt_transfer.keys():
